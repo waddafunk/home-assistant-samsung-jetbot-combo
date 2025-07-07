@@ -1,7 +1,7 @@
 # home-assistant-samsung-jetbot
 Samsung Jet Bot Intergration for Home assistant<br>
 
-This is my first try at an intergration, hope it works!<br><br><br>Please give feedback and i will do the bast i can.<br> you will need a smarthings API key and the device Key for the vacuume.<br> the API key can be found here.<br><br>
+This is my first try at an intergration, hope it works!<br><br><br>Please give feedback and i will do the bast i can.<br>Add the repo to HACS<br><br> You will need a smarthings API key and the device Key for the vacuume.<br> the API key can be found here.<br><br>
 https://account.smartthings.com/tokens<br><br>
 
 to get the device ID (let me know if there is an easier way) use this link <br><br>https://my.smartthings.com/location<br><br>
