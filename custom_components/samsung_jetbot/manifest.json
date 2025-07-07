@@ -1,0 +1,11 @@
+{
+  "domain": "samsung_jetbot",
+  "name": "Samsung Jet Bot Vacuum",
+  "version": "1.0.0",
+  "requirements": ["aiohttp"],
+  "config_flow": true,
+  "dependencies": [],
+  "codeowners": ["@yourgithubhandle"],
+  "iot_class": "cloud_polling",
+  "supported_platforms": ["sensor", "vacuum", "select"]
+}
