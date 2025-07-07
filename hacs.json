@@ -1,9 +1,7 @@
 {
-  "name": "Samsung Jet Bot Vacuum",
+  "name": "Samsung JetBot",
   "content_in_root": false,
-  "filename": "custom_components/samsung_jetbot/manifest.json",
-  "domains": ["sensor", "vacuum", "select"],
-  "homeassistant": "2025.7.0",
-  "render_readme": true,
-  "zip_release": true
+  "domains": ["samsung_jetbot"],
+  "homeassistant": "2023.5.0",
+  "hacs": "1.0.0"
 }
