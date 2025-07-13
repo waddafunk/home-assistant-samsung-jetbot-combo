@@ -41,7 +41,7 @@ jobs:
           # Get current version
           CURRENT_VERSION=$(python3 -c "
           import json
-          with open('custom_components/samsung_jetbot_combo/manifest.json', 'r') as f:
+          with open('custom_components/samsung_jetbot/manifest.json', 'r') as f:
               data = json.load(f)
               print(data['version'])
           ")
@@ -69,18 +69,18 @@ jobs:
           import json
           
           # Update manifest.json
-          with open('custom_components/samsung_jetbot_combo/manifest.json', 'r') as f:
+          with open('custom_components/samsung_jetbot/manifest.json', 'r') as f:
               data = json.load(f)
               
           data['version'] = '$NEW_VERSION'
           
-          with open('custom_components/samsung_jetbot_combo/manifest.json', 'w') as f:
+          with open('custom_components/samsung_jetbot/manifest.json', 'w') as f:
               json.dump(data, f, indent=2)
           "
           
           # Update const.py if it exists
-          if [ -f "custom_components/samsung_jetbot_combo/const.py" ]; then
-            sed -i "s/VERSION = \".*\"/VERSION = \"$NEW_VERSION\"/" custom_components/samsung_jetbot_combo/const.py
+          if [ -f "custom_components/samsung_jetbot/const.py" ]; then
+            sed -i "s/VERSION = \".*\"/VERSION = \"$NEW_VERSION\"/" custom_components/samsung_jetbot/const.py
           fi
           
           # Commit changes
