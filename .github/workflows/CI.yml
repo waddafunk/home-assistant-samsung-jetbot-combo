@@ -1,8 +1,7 @@
-name: Pull Request Checks
+name: CI
 
 on:
-  pull_request:
-    branches: [ main ]
+  push:
 
 jobs:
   format-and-lint:
