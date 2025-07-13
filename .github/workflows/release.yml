@@ -80,9 +80,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-      - name: Generate changelog
+      - name: Generate release notes
         run: |
-          # Simple changelog generation
+          # Simple release notes generation
           NEW_VERSION="${{ needs.check-version.outputs.new-version }}"
           
           # Get commits since last tag
@@ -90,10 +90,23 @@ jobs:
           if [ -n "$LAST_TAG" ]; then
             COMMITS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges)
           else
-            COMMITS=$(git log --oneline --no-merges)
+            COMMITS=$(git log --oneline --no-merges --max-count=10)
           fi
           
-          # Create changelog entry
+          # Create release notes
+          echo "## What's Changed" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          
+          if [ -n "$COMMITS" ]; then
+            echo "$COMMITS" | sed 's/^[a-f0-9]* /- /' >> RELEASE_NOTES.md
+          else
+            echo "- Initial release" >> RELEASE_NOTES.md
+          fi
+          
+          echo "" >> RELEASE_NOTES.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${NEW_VERSION}" >> RELEASE_NOTES.md
+          
+          # Also update CHANGELOG.md for the repository
           echo "## [$NEW_VERSION] - $(date +%Y-%m-%d)" > temp_changelog.md
           echo "" >> temp_changelog.md
           
@@ -101,7 +114,7 @@ jobs:
             echo "### Changes" >> temp_changelog.md
             echo "$COMMITS" | sed 's/^[a-f0-9]* /- /' >> temp_changelog.md
           else
-            echo "- No changes" >> temp_changelog.md
+            echo "- Initial release" >> temp_changelog.md
           fi
           
           echo "" >> temp_changelog.md
