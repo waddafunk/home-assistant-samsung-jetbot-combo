@@ -1,15 +1,15 @@
 {
   "domain": "samsung_jetbot",
   "name": "Samsung Jet Bot Combo",
+  "documentation": "https://github.com/waddafunk/home-assistant-samsung-jetbot-combo",
+  "issue_tracker": "https://github.com/waddafunk/home-assistant-samsung-jetbot-combo/issues",
+  "codeowners": ["@waddafunk", "@jennoian"],
   "version": "1.0.0",
   "requirements": [
     "aiohttp>=3.8.0"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/waddafunk/home-assistant-samsung-jetbot-combo",
-  "issue_tracker": "https://github.com/waddafunk/home-assistant-samsung-jetbot-combo/issues",
   "dependencies": [],
-  "codeowners": ["@jennoian", "@waddafunk"],
   "iot_class": "cloud_polling",
-  "supported_platforms": ["sensor", "vacuum", "select"]
+  "homeassistant": "2025.6"
 }
