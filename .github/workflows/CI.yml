@@ -1,0 +1,16 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  format-and-lint:
+    uses: waddafunk/make-pipelines/.github/workflows/format-and-lint.yml@ca807d1
+
+  commit:
+    needs: [format-and-lint]
+    if: needs.format-and-lint.outputs.has-changes == 'true'
+    uses: waddafunk/make-pipelines/.github/workflows/push-if-changes.yml@ca807d1
+    with:
+      ref: ${{ github.head_ref }}
