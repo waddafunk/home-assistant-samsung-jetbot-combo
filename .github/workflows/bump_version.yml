@@ -1,0 +1,89 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version type to bump'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install semver
+          
+      - name: Configure git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+      - name: Bump version
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(python3 -c "
+          import json
+          with open('custom_components/samsung_jetbot_combo/manifest.json', 'r') as f:
+              data = json.load(f)
+              print(data['version'])
+          ")
+          
+          # Calculate new version
+          NEW_VERSION=$(python3 -c "
+          import semver
+          current = '$CURRENT_VERSION'
+          version_type = '${{ github.event.inputs.version_type }}'
+          
+          if version_type == 'major':
+              new_version = semver.bump_major(current)
+          elif version_type == 'minor':
+              new_version = semver.bump_minor(current)
+          else:
+              new_version = semver.bump_patch(current)
+              
+          print(new_version)
+          ")
+          
+          echo "Bumping version from $CURRENT_VERSION to $NEW_VERSION"
+          
+          # Update manifest.json
+          python3 -c "
+          import json
+          
+          # Update manifest.json
+          with open('custom_components/samsung_jetbot_combo/manifest.json', 'r') as f:
+              data = json.load(f)
+              
+          data['version'] = '$NEW_VERSION'
+          
+          with open('custom_components/samsung_jetbot_combo/manifest.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          "
+          
+          # Update const.py if it exists
+          if [ -f "custom_components/samsung_jetbot_combo/const.py" ]; then
+            sed -i "s/VERSION = \".*\"/VERSION = \"$NEW_VERSION\"/" custom_components/samsung_jetbot_combo/const.py
+          fi
+          
+          # Commit changes
+          git add .
+          git commit -m "Bump version to $NEW_VERSION"
+          git push
