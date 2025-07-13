@@ -27,7 +27,8 @@ format:
 	$(PYTHON) -m isort $(PACKAGE) 
 	$(PYTHON) -m black $(PACKAGE) 
 	
-
+upgrade:
+	@echo "Skipping upgrade"
 lint:
 	$(PYTHON) -m pylint $(PACKAGE) 
 	
