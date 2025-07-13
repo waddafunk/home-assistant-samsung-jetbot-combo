@@ -1,10 +1,13 @@
 """Initialize the Samsung Jet Bot integration."""
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+
 from .const import DOMAIN
 from .sensor import SmartThingsDataUpdateCoordinator
 
 PLATFORMS = ["sensor", "vacuum", "select"]
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Samsung Jet Bot from a config entry."""
@@ -24,6 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     return True
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""

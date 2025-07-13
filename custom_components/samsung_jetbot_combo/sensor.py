@@ -1,14 +1,19 @@
 """Sensor platform for Samsung Jet Bot."""
+
 import logging
 from datetime import timedelta
 
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, CoordinatorEntity
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
 
 from .const import DOMAIN, SMARTTHINGS_BASE_URL
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class SmartThingsDataUpdateCoordinator(DataUpdateCoordinator):
     """Coordinator to fetch SmartThings device data."""
@@ -46,6 +51,7 @@ class SmartThingsDataUpdateCoordinator(DataUpdateCoordinator):
             "components": status_json.get("components", {}),
             "label": detail_json.get("label"),
         }
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up sensors for Samsung Jet Bot."""
@@ -148,6 +154,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     ]
 
     async_add_entities(sensors, update_before_add=True)
+
 
 class JetBotSensor(CoordinatorEntity, SensorEntity):
     """Generic sensor for Samsung Jet Bot attributes."""
