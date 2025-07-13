@@ -107,9 +107,9 @@ class JetBotCleaningTypeSelect(CoordinatorEntity, SelectEntity):
         current = self.current_option
         if current == "Vacuum Only":
             return "mdi:robot-vacuum"
-        elif current == "Mop Only":
+        if current == "Mop Only":
             return "mdi:spray-bottle"
-        elif current in ["Vacuum & Mop Together", "Vacuum Then Mop"]:
+        if current in ["Vacuum & Mop Together", "Vacuum Then Mop"]:
             return "mdi:robot-vacuum-variant"
         return "mdi:robot-vacuum"
 

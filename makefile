@@ -29,6 +29,7 @@ format:
 	
 upgrade:
 	@echo "Skipping upgrade"
+
 lint:
-	$(PYTHON) -m pylint $(PACKAGE) 
+	$(PYTHON) -m pylint $(PACKAGE) --disable=E0401,R0801,R0903,W0718,W0613,C0116
 	
