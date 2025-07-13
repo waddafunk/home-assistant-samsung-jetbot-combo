@@ -1,0 +1,15 @@
+name: CI
+
+on:
+  push:
+
+jobs:
+  format-and-lint:
+    uses: waddafunk/make-pipelines/.github/workflows/format-and-lint.yml@main
+
+  commit:
+    needs: [format-and-lint]
+    if: needs.format-and-lint.outputs.has-changes == 'true'
+    uses: waddafunk/make-pipelines/.github/workflows/push-if-changes.yml@main
+    with:
+      ref: ${{ github.head_ref }}

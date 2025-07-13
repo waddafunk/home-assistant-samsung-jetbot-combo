@@ -1,10 +1,11 @@
 name: Validate
 
 on:
-  push:
-  pull_request:
-  schedule:
-    - cron: "0 0 * * *"
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches:
+        - 'beta'
 
 jobs:
   validate-hacs:
@@ -42,12 +43,12 @@ jobs:
           
       - name: Lint with flake8
         run: |
-          flake8 custom_components/samsung_jetbot --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 custom_components/samsung_jetbot_combo --count --select=E9,F63,F7,F82 --show-source --statistics
           
       - name: Check formatting with black
         run: |
-          black --check custom_components/samsung_jetbot
+          black --check custom_components/samsung_jetbot_combo
           
       - name: Check import sorting with isort
         run: |
-          isort --check-only custom_components/samsung_jetbot
+          isort --check-only custom_components/samsung_jetbot_combo

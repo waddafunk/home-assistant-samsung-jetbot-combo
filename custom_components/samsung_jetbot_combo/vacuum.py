@@ -1,12 +1,15 @@
 """Support for Samsung Jet Bot vacuum via SmartThings."""
+
 import logging
+
 from homeassistant.components.vacuum import (
     StateVacuumEntity,
-    VacuumEntityFeature,
     VacuumActivity,
+    VacuumEntityFeature,
 )
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from .const import DOMAIN, SMARTTHINGS_BASE_URL
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,6 +23,7 @@ SUPPORT_JETBOT = (
     | VacuumEntityFeature.TURN_ON
     | VacuumEntityFeature.TURN_OFF
 )
+
 
 async def send_command(
     hass,
@@ -36,18 +40,28 @@ async def send_command(
         "Content-Type": "application/json",
         "Accept": "application/vnd.smartthings+json;v=1",
     }
-    payload = {"commands":[{"component":"main","capability":capability,"command":command}]}
+    payload = {
+        "commands": [
+            {"component": "main", "capability": capability, "command": command}
+        ]
+    }
     resp = await session.post(url, json=payload, headers=headers)
     resp.raise_for_status()
     await resp.release()
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the Jet Bot vacuum from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     async_add_entities(
-        [JetBotVacuum(coordinator, entry.data["access_token"], entry.data["device_id"])],
+        [
+            JetBotVacuum(
+                coordinator, entry.data["access_token"], entry.data["device_id"]
+            )
+        ],
         update_before_add=True,
     )
+
 
 class JetBotVacuum(CoordinatorEntity, StateVacuumEntity):
     """Representation of a Samsung Jet Bot vacuum."""
@@ -64,7 +78,11 @@ class JetBotVacuum(CoordinatorEntity, StateVacuumEntity):
     def state(self) -> str:
         """Show the raw operating state."""
         comps = self.coordinator.data.get("components", {})
-        raw = comps.get("main", {}).get("samsungce.robotCleanerOperatingState", {}).get("operatingState")
+        raw = (
+            comps.get("main", {})
+            .get("samsungce.robotCleanerOperatingState", {})
+            .get("operatingState")
+        )
         if isinstance(raw, dict):
             raw = raw.get("value")
         return str(raw).lower() if raw else super().state or ""
@@ -167,7 +185,9 @@ class JetBotVacuum(CoordinatorEntity, StateVacuumEntity):
 
     async def async_return_to_base(self, **kwargs):
         _LOGGER.debug("Returning Jet Bot to dock")
-        await send_command(self.hass, self._access_token, self._device_id, "returnToHome")
+        await send_command(
+            self.hass, self._access_token, self._device_id, "returnToHome"
+        )
         await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self, **kwargs):

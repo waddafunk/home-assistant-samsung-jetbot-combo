@@ -1,9 +1,5 @@
 {
   "name": "Samsung Jet Bot Combo",
   "content_in_root": false,
-  "domains": ["samsung_jetbot", "vacuum", "mop", "sensor", "switch"],
-  "homeassistant": "2023.5.0",
-  "hacs": "1.0.0",
-  "render_readme": true,
-  "filename": "samsung_jetbot.zip"
+  "render_readme": true
 }
