@@ -14,33 +14,23 @@ _LOGGER = logging.getLogger(__name__)
 async def send_cleaning_type_command_via_smartthings(hass, device_id, cleaning_type):
     """Send a cleaning type command via SmartThings entities."""
     try:
-        # Try SmartThings service call first
-        await hass.services.async_call(
-            "smartthings", "execute_device_command",
-            {
-                "device_id": device_id,
-                "capability": "samsungce.robotCleanerCleaningType",
-                "command": "setCleaningType",
-                "arguments": [cleaning_type]
-            }
-        )
-        _LOGGER.debug("Sent cleaning type command %s to device %s", cleaning_type, device_id)
+        # Find SmartThings select entities for this device
+        entity_registry = async_get_entity_registry(hass)
         
-    except Exception as err:
-        _LOGGER.error("Failed to send cleaning type command %s to device %s: %s", cleaning_type, device_id, err)
+        cleaning_type_entities = []
+        for entry in entity_registry.entities.values():
+            if (entry.platform == "smartthings" and 
+                entry.domain == "select" and
+                entry.unique_id and device_id in entry.unique_id):
+                # Look for cleaning type or mode select entities
+                if any(word in entry.entity_id.lower() for word in ["cleaning", "type", "mode"]):
+                    cleaning_type_entities.append(entry.entity_id)
         
-        # Fallback: try to find and use select entities
-        try:
-            entity_registry = async_get_entity_registry(hass)
-            select_entities = [
-                entry.entity_id for entry in entity_registry.entities.values()
-                if (entry.platform == "smartthings" and 
-                    entry.domain == "select" and
-                    entry.unique_id and device_id in entry.unique_id and
-                    ("cleaning" in entry.entity_id.lower() or "type" in entry.entity_id.lower()))
-            ]
+        if cleaning_type_entities:
+            # Use the first available select entity
+            select_entity = cleaning_type_entities[0]
             
-            # Convert friendly name to raw value for SmartThings
+            # Convert friendly name to raw value that SmartThings expects
             raw_cleaning_type = cleaning_type
             if cleaning_type == "Vacuum Only":
                 raw_cleaning_type = "vacuum"
@@ -51,21 +41,38 @@ async def send_cleaning_type_command_via_smartthings(hass, device_id, cleaning_t
             elif cleaning_type == "Vacuum Then Mop":
                 raw_cleaning_type = "mopAfterVacuum"
             
-            if select_entities:
-                await hass.services.async_call(
-                    "select", "select_option",
-                    {
-                        "entity_id": select_entities[0],
-                        "option": raw_cleaning_type
-                    }
-                )
-                _LOGGER.debug("Used fallback select entity to set cleaning type")
-            else:
-                raise err
-                
-        except Exception as fallback_err:
-            _LOGGER.error("Fallback cleaning type command also failed: %s", fallback_err)
-            raise err
+            # Try both raw and friendly names
+            for option_value in [raw_cleaning_type, cleaning_type]:
+                try:
+                    await hass.services.async_call(
+                        "select", "select_option",
+                        {
+                            "entity_id": select_entity,
+                            "option": option_value
+                        }
+                    )
+                    _LOGGER.debug("Set cleaning type to %s via entity %s", option_value, select_entity)
+                    return
+                except Exception as e:
+                    _LOGGER.debug("Failed to set option %s: %s", option_value, e)
+                    continue
+            
+            raise Exception(f"Could not set any option variant for {cleaning_type}")
+        
+        else:
+            _LOGGER.warning("No cleaning type select entities found for device %s", device_id)
+            # List available entities for debugging
+            all_entities = [
+                entry.entity_id for entry in entity_registry.entities.values()
+                if (entry.platform == "smartthings" and 
+                    entry.unique_id and device_id in entry.unique_id)
+            ]
+            _LOGGER.debug("Available SmartThings entities for device %s: %s", device_id, all_entities)
+            raise Exception("No cleaning type select entities found")
+        
+    except Exception as err:
+        _LOGGER.error("Failed to send cleaning type command %s to device %s: %s", cleaning_type, device_id, err)
+        raise
 
 
 async def async_setup_entry(hass, entry, async_add_entities):

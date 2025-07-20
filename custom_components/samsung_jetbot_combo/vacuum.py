@@ -28,73 +28,73 @@ SUPPORT_JETBOT = (
 async def send_command_via_smartthings(hass, device_id, command, capability="samsungce.robotCleanerOperatingState"):
     """Send a command via SmartThings entities."""
     try:
-        # Find SmartThings switch/button entities for this device
+        # Find SmartThings entities for this device
         entity_registry = async_get_entity_registry(hass)
         
-        # Look for SmartThings entities that can control the vacuum
-        control_entities = []
+        # Get all SmartThings entities for this device
+        device_entities = []
         for entry in entity_registry.entities.values():
             if (entry.platform == "smartthings" and 
                 entry.unique_id and device_id in entry.unique_id):
-                # Look for switch or button entities that might control the vacuum
-                if (entry.domain in ["switch", "button"] or
-                    "vacuum" in entry.entity_id or 
-                    "robot" in entry.entity_id or
-                    command.lower() in entry.entity_id.lower()):
-                    control_entities.append(entry.entity_id)
+                device_entities.append({
+                    "entity_id": entry.entity_id,
+                    "domain": entry.domain,
+                    "unique_id": entry.unique_id
+                })
         
-        # Try to execute the command through SmartThings service calls
+        _LOGGER.debug("Found %d SmartThings entities for device %s", len(device_entities), device_id)
+        
+        # Try to execute the command through appropriate entities
         if command == "start":
-            # Look for start/play/on entities
-            for entity_id in control_entities:
-                if any(word in entity_id.lower() for word in ["start", "play", "on", "vacuum"]):
-                    await hass.services.async_call("switch", "turn_on", {"entity_id": entity_id})
-                    return
-            # Fallback: use SmartThings service directly
-            await hass.services.async_call(
-                "smartthings", "execute_device_command",
-                {
-                    "device_id": device_id,
-                    "capability": capability,
-                    "command": "start"
-                }
-            )
+            # Look for switch entities that might start the vacuum
+            for entity in device_entities:
+                entity_id = entity["entity_id"]
+                if entity["domain"] == "switch":
+                    if any(word in entity_id.lower() for word in ["vacuum", "clean", "start", "power"]):
+                        await hass.services.async_call("switch", "turn_on", {"entity_id": entity_id})
+                        _LOGGER.debug("Started vacuum via switch entity: %s", entity_id)
+                        return
+                elif entity["domain"] == "button":
+                    if any(word in entity_id.lower() for word in ["start", "clean", "play"]):
+                        await hass.services.async_call("button", "press", {"entity_id": entity_id})
+                        _LOGGER.debug("Started vacuum via button entity: %s", entity_id)
+                        return
         
         elif command == "stop":
-            for entity_id in control_entities:
-                if any(word in entity_id.lower() for word in ["stop", "off"]):
-                    await hass.services.async_call("switch", "turn_off", {"entity_id": entity_id})
-                    return
-            await hass.services.async_call(
-                "smartthings", "execute_device_command",
-                {
-                    "device_id": device_id,
-                    "capability": capability,
-                    "command": "stop"
-                }
-            )
+            for entity in device_entities:
+                entity_id = entity["entity_id"]
+                if entity["domain"] == "switch":
+                    if any(word in entity_id.lower() for word in ["vacuum", "clean", "power"]):
+                        await hass.services.async_call("switch", "turn_off", {"entity_id": entity_id})
+                        _LOGGER.debug("Stopped vacuum via switch entity: %s", entity_id)
+                        return
+                elif entity["domain"] == "button":
+                    if any(word in entity_id.lower() for word in ["stop", "pause"]):
+                        await hass.services.async_call("button", "press", {"entity_id": entity_id})
+                        _LOGGER.debug("Stopped vacuum via button entity: %s", entity_id)
+                        return
         
         elif command == "pause":
-            await hass.services.async_call(
-                "smartthings", "execute_device_command",
-                {
-                    "device_id": device_id,
-                    "capability": capability,
-                    "command": "pause"
-                }
-            )
+            for entity in device_entities:
+                entity_id = entity["entity_id"]
+                if entity["domain"] == "button":
+                    if "pause" in entity_id.lower():
+                        await hass.services.async_call("button", "press", {"entity_id": entity_id})
+                        _LOGGER.debug("Paused vacuum via button entity: %s", entity_id)
+                        return
         
         elif command == "returnToHome":
-            await hass.services.async_call(
-                "smartthings", "execute_device_command",
-                {
-                    "device_id": device_id,
-                    "capability": capability,
-                    "command": "returnToHome"
-                }
-            )
+            for entity in device_entities:
+                entity_id = entity["entity_id"]
+                if entity["domain"] == "button":
+                    if any(word in entity_id.lower() for word in ["home", "dock", "return"]):
+                        await hass.services.async_call("button", "press", {"entity_id": entity_id})
+                        _LOGGER.debug("Returned vacuum home via button entity: %s", entity_id)
+                        return
         
-        _LOGGER.debug("Sent command %s to device %s", command, device_id)
+        # If no specific entity found, log available entities for debugging
+        _LOGGER.warning("No suitable entity found for command %s. Available entities: %s", 
+                       command, [e["entity_id"] for e in device_entities])
         
     except Exception as err:
         _LOGGER.error("Failed to send command %s to device %s: %s", command, device_id, err)
