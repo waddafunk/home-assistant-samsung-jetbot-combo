@@ -1,24 +1,54 @@
-"""Sensor platform for Samsung Jet Bot leveraging SmartThings entities."""
+"""Sensor platform for Samsung Jet Bot using OAuth tokens (original method restored)."""
 
 import logging
 from datetime import timedelta
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.core import callback
-from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
     UpdateFailed,
 )
 
-from .const import DOMAIN
+from .const import DOMAIN, SMARTTHINGS_BASE_URL
 
 _LOGGER = logging.getLogger(__name__)
 
 
+async def get_smartthings_access_token(hass, smartthings_entry_id):
+    """Get the access token from the SmartThings integration."""
+    try:
+        # Get the SmartThings integration entry
+        smartthings_entry = hass.config_entries.async_get_entry(smartthings_entry_id)
+        if not smartthings_entry:
+            raise Exception("SmartThings entry not found")
+        
+        # Get the OAuth session from the SmartThings integration
+        if "smartthings" in hass.data and smartthings_entry_id in hass.data["smartthings"]:
+            smartthings_data = hass.data["smartthings"][smartthings_entry_id]
+            
+            # Try different ways to get the token depending on the integration structure
+            if hasattr(smartthings_data, 'api') and hasattr(smartthings_data.api, '_token'):
+                return smartthings_data.api._token
+            elif 'token' in smartthings_data:
+                return smartthings_data['token']
+            elif hasattr(smartthings_data, 'token'):
+                return smartthings_data.token
+        
+        # Fallback: try to get token from the entry data
+        if 'token' in smartthings_entry.data:
+            return smartthings_entry.data['token']['access_token']
+            
+        raise Exception("Could not extract access token from SmartThings integration")
+        
+    except Exception as err:
+        _LOGGER.error("Failed to get SmartThings access token: %s", err)
+        raise
+
+
 class JetBotDataUpdateCoordinator(DataUpdateCoordinator):
-    """Coordinator to fetch Samsung Jet Bot data from SmartThings entities."""
+    """Coordinator to fetch SmartThings device data using OAuth tokens (original method restored)."""
 
     def __init__(self, hass, device_id: str, smartthings_entry_id: str):
         super().__init__(
@@ -31,59 +61,34 @@ class JetBotDataUpdateCoordinator(DataUpdateCoordinator):
         self._smartthings_entry_id = smartthings_entry_id
 
     async def _async_update_data(self):
-        """Fetch latest status from SmartThings entities."""
+        """Fetch latest status and device detail from SmartThings (original method restored)."""
         try:
-            # Get entity registry to find SmartThings entities for this device
-            entity_registry = async_get_entity_registry(self.hass)
-            
-            # Find all SmartThings entities for this device
-            smartthings_entities = [
-                entry for entry in entity_registry.entities.values()
-                if entry.config_entry_id == self._smartthings_entry_id
-                and entry.unique_id and self._device_id in entry.unique_id
-            ]
-            
-            if not smartthings_entities:
-                raise UpdateFailed(f"No SmartThings entities found for device {self._device_id}")
-            
-            # Collect current state from all related entities
-            device_data = {
-                "components": {"main": {}},
-                "label": f"Samsung Jet Bot {self._device_id}",
-                "entities": {}
+            access_token = await get_smartthings_access_token(self.hass, self._smartthings_entry_id)
+            session = async_get_clientsession(self.hass)
+            headers = {"Authorization": f"Bearer {access_token}"}
+
+            # 1) Get device status (all components/attributes)
+            status_url = f"{SMARTTHINGS_BASE_URL}/{self._device_id}/status"
+            resp = await session.get(status_url, headers=headers)
+            resp.raise_for_status()
+            status_json = await resp.json()
+            await resp.release()
+
+            # 2) Get device details (for the label)
+            detail_url = f"{SMARTTHINGS_BASE_URL}/{self._device_id}"
+            resp = await session.get(detail_url, headers=headers)
+            resp.raise_for_status()
+            detail_json = await resp.json()
+            await resp.release()
+
+            return {
+                "components": status_json.get("components", {}),
+                "label": detail_json.get("label"),
             }
-            
-            for entity_entry in smartthings_entities:
-                entity_id = entity_entry.entity_id
-                state = self.hass.states.get(entity_id)
-                
-                if state:
-                    # Store entity data for easy access
-                    device_data["entities"][entity_id] = {
-                        "state": state.state,
-                        "attributes": state.attributes
-                    }
-                    
-                    # Try to map to SmartThings capability structure
-                    # This is a simplified mapping - extend as needed
-                    if "battery" in entity_id:
-                        device_data["components"]["main"]["battery"] = {
-                            "battery": {"value": state.state}
-                        }
-                    elif "operating" in entity_id or "state" in entity_id:
-                        device_data["components"]["main"]["samsungce.robotCleanerOperatingState"] = {
-                            "operatingState": {"value": state.state}
-                        }
-                    elif "cleaning" in entity_id and "mode" in entity_id:
-                        device_data["components"]["main"]["samsungce.robotCleanerCleaningMode"] = {
-                            "robotCleanerCleaningMode": {"value": state.state}
-                        }
-            
-            return device_data
             
         except Exception as err:
             _LOGGER.error("Error updating data for device %s: %s", self._device_id, err)
-            raise UpdateFailed(f"Error communicating with SmartThings entities: {err}") from err
+            raise UpdateFailed(f"Error communicating with SmartThings API: {err}") from err
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -91,7 +96,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     device_id = entry.data["device_id"]
 
-    # Create enhanced sensors that work with the coordinator
     sensors = [
         JetBotSensor(
             coordinator,
@@ -107,6 +111,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
         JetBotSensor(
             coordinator,
             device_id,
+            key="mode",
+            name="Cleaning Mode",
+            capability="samsungce.robotCleanerCleaningMode",
+            value_key="robotCleanerCleaningMode",
+            component="main",
+        ),
+        JetBotSensor(
+            coordinator,
+            device_id,
             key="state",
             name="Operating State",
             capability="samsungce.robotCleanerOperatingState",
@@ -116,10 +129,64 @@ async def async_setup_entry(hass, entry, async_add_entities):
         JetBotSensor(
             coordinator,
             device_id,
-            key="mode",
-            name="Cleaning Mode",
-            capability="samsungce.robotCleanerCleaningMode",
-            value_key="robotCleanerCleaningMode",
+            key="step",
+            name="Cleaning Step",
+            capability="samsungce.robotCleanerOperatingState",
+            value_key="cleaningStep",
+            component="main",
+        ),
+        JetBotSensor(
+            coordinator,
+            device_id,
+            key="dustbin",
+            name="Dustbin Status",
+            capability="samsungce.robotCleanerDustBag",
+            value_key="status",
+            component="station",
+        ),
+        JetBotSensor(
+            coordinator,
+            device_id,
+            key="spray",
+            name="Water Spray Level",
+            capability="samsungce.robotCleanerWaterSprayLevel",
+            value_key="waterSprayLevel",
+            component="main",
+        ),
+        JetBotSensor(
+            coordinator,
+            device_id,
+            key="turbo",
+            name="Turbo Mode",
+            capability="samsungce.robotCleanerTurboMode",
+            value_key="robotCleanerTurboMode",
+            component="main",
+        ),
+        JetBotSensor(
+            coordinator,
+            device_id,
+            key="sound",
+            name="Sound Mode",
+            capability="samsungce.robotCleanerSystemSoundMode",
+            value_key="soundMode",
+            component="main",
+        ),
+        JetBotSensor(
+            coordinator,
+            device_id,
+            key="map_area",
+            name="Map Area",
+            capability="samsungce.robotCleanerMapCleaningInfo",
+            value_key="area",
+            component="main",
+        ),
+        JetBotSensor(
+            coordinator,
+            device_id,
+            key="extent",
+            name="Cleaned Extent",
+            capability="samsungce.robotCleanerMapCleaningInfo",
+            value_key="cleanedExtent",
             component="main",
         ),
     ]
@@ -160,19 +227,9 @@ class JetBotSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Extract the latest value from coordinator data."""
-        # Try to get from structured components first
         comps = self.coordinator.data.get("components", {})
         cap = comps.get(self._component, {}).get(self._capability, {})
         raw = cap.get(self._value_key)
         if isinstance(raw, dict) and "value" in raw:
             return raw["value"]
-        elif raw is not None:
-            return raw
-            
-        # Fallback: look for matching entity data
-        entities = self.coordinator.data.get("entities", {})
-        for entity_id, entity_data in entities.items():
-            if self._key in entity_id:
-                return entity_data["state"]
-                
-        return None
+        return raw
