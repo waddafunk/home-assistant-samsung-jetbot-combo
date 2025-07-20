@@ -1,4 +1,4 @@
-"""Config flow for Samsung Jet Bot with OAuth 2.0 support."""
+"""Config flow for Samsung Jet Bot with OAuth 2.0 support only."""
 
 import logging
 from typing import Any
@@ -138,57 +138,3 @@ class SamsungJetBotOAuth2FlowHandler(
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> config_entries.ConfigFlowResult:
         """Handle a flow initialized by the user."""
         return await self.async_step_pick_implementation(user_input)
-
-
-# Legacy config flow for backwards compatibility and manual setup
-class SamsungJetBotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a legacy config flow for Samsung Jet Bot (manual token entry)."""
-
-    VERSION = 1
-
-    async def async_step_user(self, user_input=None):
-        """Initial step for manual configuration."""
-        errors = {}
-        if user_input:
-            token = user_input["access_token"]
-            device_id = user_input["device_id"]
-            session = async_get_clientsession(self.hass)
-            try:
-                resp = await session.get(
-                    f"{SMARTTHINGS_BASE_URL}/{device_id}/status",
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-                if resp.status == 200:
-                    await resp.release()
-                    # Convert to OAuth format for consistency
-                    oauth_data = {
-                        "token": {
-                            "access_token": token,
-                            "token_type": "bearer"
-                        },
-                        "device_id": device_id,
-                        "auth_implementation": "manual"
-                    }
-                    return self.async_create_entry(
-                        title=f"Samsung Jet Bot {device_id}", data=oauth_data
-                    )
-                errors["base"] = (
-                    "invalid_auth" if resp.status in (401, 403) else "invalid_device"
-                )
-                await resp.release()
-            except Exception:
-                errors["base"] = "cannot_connect"
-                
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("access_token"): str,
-                    vol.Required("device_id"): str,
-                }
-            ),
-            errors=errors,
-            description_placeholders={
-                "oauth_note": "Note: Manual token entry is deprecated. Consider using OAuth 2.0 setup instead."
-            }
-        )

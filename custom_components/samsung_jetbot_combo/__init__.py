@@ -18,27 +18,20 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Samsung Jet Bot from a config entry."""
     
-    # Handle OAuth token
-    if "token" in entry.data:
-        # OAuth 2.0 flow
-        implementation = await config_entry_oauth2_flow.async_get_config_entry_implementation(
-            hass, entry
-        )
-        session = config_entry_oauth2_flow.OAuth2Session(hass, entry, implementation)
+    # OAuth 2.0 flow (required)
+    implementation = await config_entry_oauth2_flow.async_get_config_entry_implementation(
+        hass, entry
+    )
+    session = config_entry_oauth2_flow.OAuth2Session(hass, entry, implementation)
+    
+    try:
+        await session.async_ensure_token_valid()
+    except Exception as err:
+        _LOGGER.error("Token refresh failed: %s", err)
+        raise ConfigEntryAuthFailed("Token refresh failed") from err
         
-        try:
-            await session.async_ensure_token_valid()
-        except Exception as err:
-            _LOGGER.error("Token refresh failed: %s", err)
-            raise ConfigEntryAuthFailed("Token refresh failed") from err
-            
-        access_token = session.token["access_token"]
-        device_id = entry.data["device_id"]
-        
-    else:
-        # Legacy manual token (for backwards compatibility)
-        access_token = entry.data["access_token"]
-        device_id = entry.data["device_id"]
+    access_token = session.token["access_token"]
+    device_id = entry.data["device_id"]
 
     # Test the connection
     session_client = async_get_clientsession(hass)
@@ -63,9 +56,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Initialize and refresh coordinator
     coordinator = SmartThingsDataUpdateCoordinator(hass, access_token, device_id)
     
-    # If using OAuth, pass the session to coordinator for token refresh
-    if "token" in entry.data:
-        coordinator.oauth_session = session
+    # Pass the OAuth session to coordinator for token refresh
+    coordinator.oauth_session = session
         
     await coordinator.async_config_entry_first_refresh()
 

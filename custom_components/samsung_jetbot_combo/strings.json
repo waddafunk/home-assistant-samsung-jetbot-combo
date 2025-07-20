@@ -15,15 +15,8 @@
       "reauth_confirm": {
         "title": "Re-authenticate with SmartThings",
         "description": "The SmartThings integration needs to re-authenticate with account {account}."
-      },
-      "user": {
-        "title": "Manual Token Configuration (Deprecated)",
-        "description": "Enter your SmartThings Personal Access Token and Device ID manually. Note: {oauth_note}",
-        "data": {
-          "access_token": "Personal Access Token",
-          "device_id": "Device ID"
-        }
       }
+
     },
     "error": {
       "cannot_connect": "Failed to connect to SmartThings API",

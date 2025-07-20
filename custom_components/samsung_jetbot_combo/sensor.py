@@ -33,16 +33,12 @@ class SmartThingsDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _get_access_token(self) -> str:
         """Get a valid access token, refreshing if necessary."""
-        if self.oauth_session:
-            try:
-                await self.oauth_session.async_ensure_token_valid()
-                return self.oauth_session.token["access_token"]
-            except Exception as err:
-                _LOGGER.error("Failed to refresh OAuth token: %s", err)
-                raise ConfigEntryAuthFailed("Token refresh failed") from err
-        else:
-            # Using legacy manual token
-            return self._access_token
+        try:
+            await self.oauth_session.async_ensure_token_valid()
+            return self.oauth_session.token["access_token"]
+        except Exception as err:
+            _LOGGER.error("Failed to refresh OAuth token: %s", err)
+            raise ConfigEntryAuthFailed("Token refresh failed") from err
 
     async def _async_update_data(self):
         """Fetch latest status and device detail from SmartThings."""
