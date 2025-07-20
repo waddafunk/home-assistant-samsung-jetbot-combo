@@ -1,7 +1,7 @@
 """Initialize the Samsung Jet Bot integration leveraging SmartThings entities."""
 
 import logging
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
@@ -21,7 +21,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Verify SmartThings integration is loaded
     smartthings_entry = hass.config_entries.async_get_entry(smartthings_entry_id)
-    if not smartthings_entry or smartthings_entry.state != ConfigEntry.ConfigEntryState.LOADED:
+    if not smartthings_entry or smartthings_entry.state != ConfigEntryState.LOADED:
         raise ConfigEntryNotReady("SmartThings integration not loaded")
 
     # Initialize coordinator that will work with SmartThings entities
