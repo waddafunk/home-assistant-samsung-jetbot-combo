@@ -1,4 +1,4 @@
-"""Support for Samsung Jet Bot vacuum via SmartThings."""
+"""Support for Samsung Jet Bot vacuum via SmartThings with OAuth 2.0."""
 
 import logging
 
@@ -7,6 +7,7 @@ from homeassistant.components.vacuum import (
     VacuumActivity,
     VacuumEntityFeature,
 )
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -27,27 +28,40 @@ SUPPORT_JETBOT = (
 
 async def send_command(
     hass,
-    access_token: str,
+    coordinator,
     device_id: str,
     command: str,
     capability: str = "samsungce.robotCleanerOperatingState",
 ):
-    """Send a command to SmartThings."""
-    session = async_get_clientsession(hass)
-    url = f"{SMARTTHINGS_BASE_URL}/{device_id}/commands"
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "Accept": "application/vnd.smartthings+json;v=1",
-    }
-    payload = {
-        "commands": [
-            {"component": "main", "capability": capability, "command": command}
-        ]
-    }
-    resp = await session.post(url, json=payload, headers=headers)
-    resp.raise_for_status()
-    await resp.release()
+    """Send a command to SmartThings with OAuth token refresh."""
+    try:
+        access_token = await coordinator._get_access_token()
+        session = async_get_clientsession(hass)
+        url = f"{SMARTTHINGS_BASE_URL}/{device_id}/commands"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.smartthings+json;v=1",
+        }
+        payload = {
+            "commands": [
+                {"component": "main", "capability": capability, "command": command}
+            ]
+        }
+        resp = await session.post(url, json=payload, headers=headers)
+        
+        if resp.status in (401, 403):
+            await resp.release()
+            raise ConfigEntryAuthFailed("Authentication failed")
+            
+        resp.raise_for_status()
+        await resp.release()
+        
+    except ConfigEntryAuthFailed:
+        raise
+    except Exception as err:
+        _LOGGER.error("Failed to send command %s: %s", command, err)
+        raise
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -56,7 +70,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(
         [
             JetBotVacuum(
-                coordinator, entry.data["access_token"], entry.data["device_id"]
+                coordinator, entry.data["device_id"]
             )
         ],
         update_before_add=True,
@@ -66,9 +80,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class JetBotVacuum(CoordinatorEntity, StateVacuumEntity):
     """Representation of a Samsung Jet Bot vacuum."""
 
-    def __init__(self, coordinator, access_token: str, device_id: str):
+    def __init__(self, coordinator, device_id: str):
         super().__init__(coordinator)
-        self._access_token = access_token
         self._device_id = device_id
         self._attr_name = coordinator.data.get("label", "Samsung Jet Bot")
         self._attr_unique_id = f"{DOMAIN}_{device_id}"
@@ -170,23 +183,23 @@ class JetBotVacuum(CoordinatorEntity, StateVacuumEntity):
 
     async def async_start(self):
         _LOGGER.debug("Starting Jet Bot")
-        await send_command(self.hass, self._access_token, self._device_id, "start")
+        await send_command(self.hass, self.coordinator, self._device_id, "start")
         await self.coordinator.async_request_refresh()
 
     async def async_stop(self, **kwargs):
         _LOGGER.debug("Stopping Jet Bot")
-        await send_command(self.hass, self._access_token, self._device_id, "stop")
+        await send_command(self.hass, self.coordinator, self._device_id, "stop")
         await self.coordinator.async_request_refresh()
 
     async def async_pause(self):
         _LOGGER.debug("Pausing Jet Bot")
-        await send_command(self.hass, self._access_token, self._device_id, "pause")
+        await send_command(self.hass, self.coordinator, self._device_id, "pause")
         await self.coordinator.async_request_refresh()
 
     async def async_return_to_base(self, **kwargs):
         _LOGGER.debug("Returning Jet Bot to dock")
         await send_command(
-            self.hass, self._access_token, self._device_id, "returnToHome"
+            self.hass, self.coordinator, self._device_id, "returnToHome"
         )
         await self.coordinator.async_request_refresh()
 

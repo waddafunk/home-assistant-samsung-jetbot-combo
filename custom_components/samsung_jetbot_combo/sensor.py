@@ -1,13 +1,15 @@
-"""Sensor platform for Samsung Jet Bot."""
+"""Sensor platform for Samsung Jet Bot with OAuth 2.0 support."""
 
 import logging
 from datetime import timedelta
 
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
+    UpdateFailed,
 )
 
 from .const import DOMAIN, SMARTTHINGS_BASE_URL
@@ -16,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SmartThingsDataUpdateCoordinator(DataUpdateCoordinator):
-    """Coordinator to fetch SmartThings device data."""
+    """Coordinator to fetch SmartThings device data with OAuth token refresh."""
 
     def __init__(self, hass, access_token: str, device_id: str):
         super().__init__(
@@ -27,30 +29,66 @@ class SmartThingsDataUpdateCoordinator(DataUpdateCoordinator):
         )
         self._access_token = access_token
         self._device_id = device_id
+        self.oauth_session = None  # Will be set by __init__.py if using OAuth
+
+    async def _get_access_token(self) -> str:
+        """Get a valid access token, refreshing if necessary."""
+        if self.oauth_session:
+            try:
+                await self.oauth_session.async_ensure_token_valid()
+                return self.oauth_session.token["access_token"]
+            except Exception as err:
+                _LOGGER.error("Failed to refresh OAuth token: %s", err)
+                raise ConfigEntryAuthFailed("Token refresh failed") from err
+        else:
+            # Using legacy manual token
+            return self._access_token
 
     async def _async_update_data(self):
         """Fetch latest status and device detail from SmartThings."""
-        session = async_get_clientsession(self.hass)
-        headers = {"Authorization": f"Bearer {self._access_token}"}
+        try:
+            access_token = await self._get_access_token()
+            session = async_get_clientsession(self.hass)
+            headers = {"Authorization": f"Bearer {access_token}"}
 
-        # 1) Get device status (all components/attributes)
-        status_url = f"{SMARTTHINGS_BASE_URL}/{self._device_id}/status"
-        resp = await session.get(status_url, headers=headers)
-        resp.raise_for_status()
-        status_json = await resp.json()
-        await resp.release()
+            # 1) Get device status (all components/attributes)
+            status_url = f"{SMARTTHINGS_BASE_URL}/{self._device_id}/status"
+            resp = await session.get(status_url, headers=headers)
+            
+            if resp.status in (401, 403):
+                await resp.release()
+                raise ConfigEntryAuthFailed("Authentication failed")
+            elif resp.status != 200:
+                await resp.release()
+                raise UpdateFailed(f"Error fetching status: {resp.status}")
+                
+            status_json = await resp.json()
+            await resp.release()
 
-        # 2) Get device details (for the label)
-        detail_url = f"{SMARTTHINGS_BASE_URL}/{self._device_id}"
-        resp = await session.get(detail_url, headers=headers)
-        resp.raise_for_status()
-        detail_json = await resp.json()
-        await resp.release()
+            # 2) Get device details (for the label)
+            detail_url = f"{SMARTTHINGS_BASE_URL}/{self._device_id}"
+            resp = await session.get(detail_url, headers=headers)
+            
+            if resp.status in (401, 403):
+                await resp.release()
+                raise ConfigEntryAuthFailed("Authentication failed")
+            elif resp.status != 200:
+                await resp.release()
+                raise UpdateFailed(f"Error fetching details: {resp.status}")
+                
+            detail_json = await resp.json()
+            await resp.release()
 
-        return {
-            "components": status_json.get("components", {}),
-            "label": detail_json.get("label"),
-        }
+            return {
+                "components": status_json.get("components", {}),
+                "label": detail_json.get("label"),
+            }
+            
+        except ConfigEntryAuthFailed:
+            raise
+        except Exception as err:
+            _LOGGER.error("Error updating data: %s", err)
+            raise UpdateFailed(f"Error communicating with API: {err}") from err
 
 
 async def async_setup_entry(hass, entry, async_add_entities):

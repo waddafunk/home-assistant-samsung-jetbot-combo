@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "pick_implementation": {
+        "title": "Choose authentication method",
+        "description": "Choose how you want to authenticate with SmartThings."
+      },
+      "device_selection": {
+        "title": "Select Samsung Jet Bot",
+        "description": "Select which Samsung Jet Bot device to add to Home Assistant.",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate with SmartThings",
+        "description": "The SmartThings integration needs to re-authenticate with account {account}."
+      },
+      "user": {
+        "title": "Manual Token Configuration (Deprecated)",
+        "description": "Enter your SmartThings Personal Access Token and Device ID manually. Note: {oauth_note}",
+        "data": {
+          "access_token": "Personal Access Token",
+          "device_id": "Device ID"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to SmartThings API",
+      "invalid_auth": "Invalid authentication credentials",
+      "invalid_device": "Invalid device ID or device not found",
+      "no_vacuum_devices": "No Samsung Jet Bot vacuum devices found in your SmartThings account"
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "no_vacuum_devices": "No Samsung Jet Bot vacuum devices found in your SmartThings account. Make sure your Jet Bot is connected to SmartThings.",
+      "user_rejected_authorize": "OAuth authorization was rejected: {error}"
+    }
+  },
+  "application_credentials": {
+    "description": "Follow [the instructions]({more_info_url}) to create application credentials for SmartThings at {oauth_url}."
+  }
+}

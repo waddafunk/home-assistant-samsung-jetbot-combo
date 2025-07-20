@@ -1,8 +1,9 @@
-"""Select platform for Jet Bot cleaning type (vacuum/mop/both)."""
+"""Select platform for Jet Bot cleaning type (vacuum/mop/both) with OAuth 2.0."""
 
 import logging
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -13,41 +14,53 @@ _LOGGER = logging.getLogger(__name__)
 
 async def send_cleaning_type_command(
     hass,
-    access_token: str,
+    coordinator,
     device_id: str,
     cleaning_type: str,
 ):
-    """Send a cleaning type command to SmartThings."""
-    session = async_get_clientsession(hass)
-    url = f"{SMARTTHINGS_BASE_URL}/{device_id}/commands"
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "Accept": "application/vnd.smartthings+json;v=1",
-    }
-    payload = {
-        "commands": [
-            {
-                "component": "main",
-                "capability": "samsungce.robotCleanerCleaningType",
-                "command": "setCleaningType",
-                "arguments": [cleaning_type],
-            }
-        ]
-    }
-    resp = await session.post(url, json=payload, headers=headers)
-    resp.raise_for_status()
-    await resp.release()
+    """Send a cleaning type command to SmartThings with OAuth token refresh."""
+    try:
+        access_token = await coordinator._get_access_token()
+        session = async_get_clientsession(hass)
+        url = f"{SMARTTHINGS_BASE_URL}/{device_id}/commands"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.smartthings+json;v=1",
+        }
+        payload = {
+            "commands": [
+                {
+                    "component": "main",
+                    "capability": "samsungce.robotCleanerCleaningType",
+                    "command": "setCleaningType",
+                    "arguments": [cleaning_type],
+                }
+            ]
+        }
+        resp = await session.post(url, json=payload, headers=headers)
+        
+        if resp.status in (401, 403):
+            await resp.release()
+            raise ConfigEntryAuthFailed("Authentication failed")
+            
+        resp.raise_for_status()
+        await resp.release()
+        
+    except ConfigEntryAuthFailed:
+        raise
+    except Exception as err:
+        _LOGGER.error("Failed to send cleaning type command %s: %s", cleaning_type, err)
+        raise
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up select platform."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    access_token = entry.data["access_token"]
     device_id = entry.data["device_id"]
 
     async_add_entities(
-        [JetBotCleaningTypeSelect(coordinator, access_token, device_id)],
+        [JetBotCleaningTypeSelect(coordinator, device_id)],
         update_before_add=True,
     )
 
@@ -55,9 +68,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class JetBotCleaningTypeSelect(CoordinatorEntity, SelectEntity):
     """Cleaning type select for Jet Bot Combo AI."""
 
-    def __init__(self, coordinator, access_token, device_id):
+    def __init__(self, coordinator, device_id):
         super().__init__(coordinator)
-        self._access_token = access_token
         self._device_id = device_id
         self._attr_name = (
             f"{coordinator.data.get('label','Jet Bot Vacuum')} Cleaning Type"
@@ -141,6 +153,6 @@ class JetBotCleaningTypeSelect(CoordinatorEntity, SelectEntity):
         raw_option = self._friendly_to_raw(option)
 
         await send_cleaning_type_command(
-            self.hass, self._access_token, self._device_id, raw_option
+            self.hass, self.coordinator, self._device_id, raw_option
         )
         await self.coordinator.async_request_refresh()
