@@ -1,14 +1,12 @@
-"""Initialize the Samsung Jet Bot integration with OAuth 2.0 support."""
+"""Initialize the Samsung Jet Bot integration leveraging official SmartThings."""
 
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import config_entry_oauth2_flow
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
-from .sensor import SmartThingsDataUpdateCoordinator
+from .sensor import JetBotDataUpdateCoordinator
 
 PLATFORMS = ["sensor", "vacuum", "select"]
 
@@ -18,51 +16,41 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Samsung Jet Bot from a config entry."""
     
-    # OAuth 2.0 flow (required)
-    implementation = await config_entry_oauth2_flow.async_get_config_entry_implementation(
-        hass, entry
-    )
-    session = config_entry_oauth2_flow.OAuth2Session(hass, entry, implementation)
+    # Get the SmartThings integration entry
+    smartthings_entry_id = entry.data["smartthings_entry_id"]
     
-    try:
-        await session.async_ensure_token_valid()
-    except Exception as err:
-        _LOGGER.error("Token refresh failed: %s", err)
-        raise ConfigEntryAuthFailed("Token refresh failed") from err
-        
-    access_token = session.token["access_token"]
+    # Verify SmartThings integration is loaded
+    if "smartthings" not in hass.data:
+        raise ConfigEntryNotReady("SmartThings integration not loaded")
+    
+    if smartthings_entry_id not in hass.data["smartthings"]:
+        raise ConfigEntryNotReady(f"SmartThings entry {smartthings_entry_id} not found")
+    
+    # Get SmartThings API access
+    smartthings_data = hass.data["smartthings"][smartthings_entry_id]
+    api = smartthings_data["api"]
     device_id = entry.data["device_id"]
-
-    # Test the connection
-    session_client = async_get_clientsession(hass)
-    try:
-        resp = await session_client.get(
-            f"https://api.smartthings.com/v1/devices/{device_id}/status",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        if resp.status in (401, 403):
-            await resp.release()
-            raise ConfigEntryAuthFailed("Authentication failed")
-        elif resp.status != 200:
-            await resp.release()
-            return False
-        await resp.release()
-    except ConfigEntryAuthFailed:
-        raise
-    except Exception as err:
-        _LOGGER.error("Connection test failed: %s", err)
-        return False
-
-    # Initialize and refresh coordinator
-    coordinator = SmartThingsDataUpdateCoordinator(hass, access_token, device_id)
     
-    # Pass the OAuth session to coordinator for token refresh
-    coordinator.oauth_session = session
-        
+    # Verify device exists
+    try:
+        device = await api.device(device_id)
+        if not device:
+            _LOGGER.error("Device %s not found in SmartThings", device_id)
+            return False
+    except Exception as err:
+        _LOGGER.error("Error accessing device %s: %s", device_id, err)
+        raise ConfigEntryNotReady(f"Cannot access device {device_id}") from err
+
+    # Initialize coordinator
+    coordinator = JetBotDataUpdateCoordinator(hass, api, device_id)
     await coordinator.async_config_entry_first_refresh()
 
     # Store coordinator
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": coordinator}
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        "coordinator": coordinator,
+        "api": api,
+        "device": device
+    }
 
     # Forward setup
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

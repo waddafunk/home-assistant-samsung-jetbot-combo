@@ -31,6 +31,6 @@
     }
   },
   "application_credentials": {
-    "description": "Follow [the instructions]({more_info_url}) to create application credentials for SmartThings at {oauth_url}."
+    "description": "For OAuth 2.0 setup, you can use any valid OAuth client credentials. Alternatively, you can create a Personal Access Token at [SmartThings]({smartthings_url}) and use it as both Client ID and Client Secret. For more information, visit the [setup instructions]({more_info_url})."
   }
 }

@@ -1,90 +1,65 @@
-"""Sensor platform for Samsung Jet Bot with OAuth 2.0 support."""
+"""Sensor platform for Samsung Jet Bot leveraging SmartThings API."""
 
 import logging
 from datetime import timedelta
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
     UpdateFailed,
 )
 
-from .const import DOMAIN, SMARTTHINGS_BASE_URL
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class SmartThingsDataUpdateCoordinator(DataUpdateCoordinator):
-    """Coordinator to fetch SmartThings device data with OAuth token refresh."""
+class JetBotDataUpdateCoordinator(DataUpdateCoordinator):
+    """Coordinator to fetch Samsung Jet Bot data via SmartThings API."""
 
-    def __init__(self, hass, access_token: str, device_id: str):
+    def __init__(self, hass, api, device_id: str):
         super().__init__(
             hass,
             _LOGGER,
             name=f"{DOMAIN}_{device_id}",
             update_interval=timedelta(seconds=30),
         )
-        self._access_token = access_token
+        self._api = api
         self._device_id = device_id
-        self.oauth_session = None  # Will be set by __init__.py if using OAuth
-
-    async def _get_access_token(self) -> str:
-        """Get a valid access token, refreshing if necessary."""
-        try:
-            await self.oauth_session.async_ensure_token_valid()
-            return self.oauth_session.token["access_token"]
-        except Exception as err:
-            _LOGGER.error("Failed to refresh OAuth token: %s", err)
-            raise ConfigEntryAuthFailed("Token refresh failed") from err
 
     async def _async_update_data(self):
-        """Fetch latest status and device detail from SmartThings."""
+        """Fetch latest status from SmartThings API."""
         try:
-            access_token = await self._get_access_token()
-            session = async_get_clientsession(self.hass)
-            headers = {"Authorization": f"Bearer {access_token}"}
-
-            # 1) Get device status (all components/attributes)
-            status_url = f"{SMARTTHINGS_BASE_URL}/{self._device_id}/status"
-            resp = await session.get(status_url, headers=headers)
+            device = await self._api.device(self._device_id)
+            if not device:
+                raise UpdateFailed(f"Device {self._device_id} not found")
             
-            if resp.status in (401, 403):
-                await resp.release()
-                raise ConfigEntryAuthFailed("Authentication failed")
-            elif resp.status != 200:
-                await resp.release()
-                raise UpdateFailed(f"Error fetching status: {resp.status}")
-                
-            status_json = await resp.json()
-            await resp.release()
-
-            # 2) Get device details (for the label)
-            detail_url = f"{SMARTTHINGS_BASE_URL}/{self._device_id}"
-            resp = await session.get(detail_url, headers=headers)
+            # Get device status
+            status = await device.status()
             
-            if resp.status in (401, 403):
-                await resp.release()
-                raise ConfigEntryAuthFailed("Authentication failed")
-            elif resp.status != 200:
-                await resp.release()
-                raise UpdateFailed(f"Error fetching details: {resp.status}")
-                
-            detail_json = await resp.json()
-            await resp.release()
-
+            # Convert to the format expected by entities
+            components = {"main": {}}
+            
+            for capability in status.capabilities:
+                cap_data = {}
+                for attr_name, attr_value in status.attributes.items():
+                    if hasattr(attr_value, 'value'):
+                        cap_data[attr_name] = {"value": attr_value.value}
+                    else:
+                        cap_data[attr_name] = attr_value
+                        
+                components["main"][capability] = cap_data
+            
             return {
-                "components": status_json.get("components", {}),
-                "label": detail_json.get("label"),
+                "components": components,
+                "label": device.label or device.device_id,
+                "device": device
             }
             
-        except ConfigEntryAuthFailed:
-            raise
         except Exception as err:
-            _LOGGER.error("Error updating data: %s", err)
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
+            _LOGGER.error("Error updating data for device %s: %s", self._device_id, err)
+            raise UpdateFailed(f"Error communicating with SmartThings API: {err}") from err
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -195,7 +170,7 @@ class JetBotSensor(CoordinatorEntity, SensorEntity):
 
     def __init__(
         self,
-        coordinator: SmartThingsDataUpdateCoordinator,
+        coordinator: JetBotDataUpdateCoordinator,
         device_id: str,
         key: str,
         name: str,
